@@ -18,15 +18,15 @@
     --shadow:0 12px 30px rgba(20,24,35,.075);
   }
   * { box-sizing:border-box; max-width:100%; }
-  html { width:100%; min-height:100%; overflow-x:hidden; overscroll-behavior-x:none; -webkit-text-size-adjust:100%; }
-  body { margin:0; width:100%; min-height:100svh; overflow-x:hidden; overscroll-behavior-x:none; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",Segoe UI,sans-serif; line-height:1.58; }
-  .app { width:min(100%, 780px); margin:0 auto; padding:14px 16px 34px; overflow-x:clip; }
+  html { width:100%; height:100%; overflow:hidden; overscroll-behavior:none; -webkit-text-size-adjust:100%; }
+  body { margin:0; position:fixed; inset:0; width:100%; height:100%; overflow:hidden; overscroll-behavior:none; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",Segoe UI,sans-serif; line-height:1.58; }
+  .app { width:min(100%, 780px); height:100dvh; margin:0 auto; padding:14px 16px calc(34px + env(safe-area-inset-bottom)); overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
   .top { margin-bottom:12px; }
   .titleRow { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   h1 { margin:0; font-size:19px; line-height:1.25; letter-spacing:-.04em; font-weight:850; color:#252934; }
   .tools { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
   button, input { font:inherit; font-size:16px; }
-  button { appearance:none; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:14px; padding:9px 12px; cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; }
+  button { appearance:none; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:14px; padding:9px 12px; cursor:pointer; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
   button:active { transform:translateY(1px); }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:850; }
   .toolBtn { border-radius:999px; padding:7px 11px; font-size:13px; font-weight:760; white-space:nowrap; color:#303540; }
@@ -52,7 +52,7 @@
   .dot.warn { background:var(--warnBg); border-color:var(--warnLine); }
   .dot.bad { background:var(--badBg); border-color:var(--badLine); }
   .numGrid { display:grid; grid-template-columns:repeat(10, 1fr); gap:7px; }
-  .numChip { min-width:0; padding:8px 0; border-radius:11px; font-size:13px; font-weight:850; text-align:center; border:1px solid var(--line); background:#fff; color:#222; }
+  .numChip { min-width:0; padding:8px 0; border-radius:11px; font-size:13px; font-weight:850; text-align:center; border:1px solid var(--line); background:#fff; color:#222; touch-action:manipulation; }
   .numChip.ok { color:var(--ok); background:var(--okBg); border-color:var(--okLine); }
   .numChip.warn { color:var(--warn); background:var(--warnBg); border-color:var(--warnLine); }
   .numChip.bad { color:var(--bad); background:var(--badBg); border-color:var(--badLine); }
@@ -96,7 +96,7 @@
   .empty { background:#fff; border:1px solid var(--line); border-radius:22px; text-align:center; color:var(--muted); padding:44px 16px; }
   .empty strong { display:block; color:#2a2f3a; font-size:17px; margin-bottom:6px; }
   @media (max-width:640px) {
-    .app { padding:12px 12px 28px; }
+    .app { padding:12px 12px calc(28px + env(safe-area-inset-bottom)); }
     h1 { font-size:18px; }
     .titleRow { gap:8px; }
     .tools { gap:6px; }
@@ -741,7 +741,12 @@
   function scrollToCard() {
     window.setTimeout(() => {
       const cardBox = document.getElementById('cardBox');
-      if (cardBox) cardBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const appScroller = document.querySelector('.app');
+      if (!cardBox || !appScroller) return;
+      const appRect = appScroller.getBoundingClientRect();
+      const cardRect = cardBox.getBoundingClientRect();
+      const targetTop = appScroller.scrollTop + cardRect.top - appRect.top - 8;
+      appScroller.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
     }, 20);
   }
 
@@ -830,6 +835,37 @@
     const markBtn = event.target.closest('button[data-mark]');
     if (markBtn) setMark(markBtn.dataset.mark);
   });
+
+  function installSafariTouchFixes() {
+    const appScroller = document.querySelector('.app');
+    if (appScroller) {
+      let touchStartY = 0;
+      appScroller.addEventListener('touchstart', event => {
+        if (event.touches.length !== 1) return;
+        touchStartY = event.touches[0].clientY;
+      }, { passive: true });
+
+      appScroller.addEventListener('touchmove', event => {
+        if (event.touches.length !== 1) return;
+        const currentY = event.touches[0].clientY;
+        const deltaY = currentY - touchStartY;
+        const atTop = appScroller.scrollTop <= 0;
+        const atBottom = Math.ceil(appScroller.scrollTop + appScroller.clientHeight) >= appScroller.scrollHeight;
+        if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+          event.preventDefault();
+        }
+      }, { passive: false });
+    }
+
+    document.addEventListener('dblclick', event => {
+      const target = event.target;
+      if (target && target.closest && target.closest('button, [role="button"]')) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+  }
+
+  installSafariTouchFixes();
 
   render(false);
 })();
